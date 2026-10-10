@@ -37,9 +37,10 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Accept Android SDK Licenses
+      - name: Accept Android SDK Licenses & Install API 36
         run: |
           yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" || true
 
       - name: Make Gradle Wrapper Executable
         run: chmod +x android/gradlew
