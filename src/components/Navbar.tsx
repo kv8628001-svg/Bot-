@@ -58,15 +58,27 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Action Controls */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Direct APK Download Button */}
+          <a
+            href="https://github.com/kv8628001-svg/Bot-/releases/download/v1.0.7/PoppoLive-GoldenFlower-AI-Bot.apk"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white flex items-center gap-1.5 shadow-md shadow-emerald-950/50 transition-all border border-emerald-400/30 animate-pulse"
+            title="সরাসরি অফিসিয়াল অ্যান্ড্রয়েড APK ডাউনলোড করুন"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>{lang === 'bn' ? 'APK ডাউনলোড (v1.0.7)' : 'Download APK'}</span>
+          </a>
+
           {/* Android PWA Install Button */}
           {isInstallable && (
             <button
               onClick={onInstall}
-              className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1 shadow-md shadow-emerald-950 transition-all animate-bounce"
+              className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-700/60 hover:bg-emerald-600 text-emerald-200 flex items-center gap-1 border border-emerald-500/30 shadow-md transition-all"
               title="অ্যান্ড্রয়েড ফোনে অ্যাপটি ইনস্টল করুন"
             >
-              <Download className="w-3.5 h-3.5" />
-              <span>{lang === 'bn' ? 'ফোনে ইনস্টল' : 'Install APK'}</span>
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>{lang === 'bn' ? 'অ্যাপ ইনস্টল' : 'Install App'}</span>
             </button>
           )}
 

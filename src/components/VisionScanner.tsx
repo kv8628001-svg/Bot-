@@ -10,6 +10,15 @@ import {
   Maximize2,
   Radio,
   Clock,
+  ShieldCheck,
+  Smartphone,
+  PictureInPicture2,
+  X,
+  ExternalLink,
+  CheckCircle2,
+  Layers,
+  Download,
+  AlertTriangle,
 } from 'lucide-react';
 import { generatePoppoLiveDemoScene } from '../utils/goldenFlowerOdds';
 import { FloatingRoundBot } from './FloatingRoundBot';
@@ -37,16 +46,46 @@ export const VisionScanner: React.FC<VisionScannerProps> = ({
   const [selectedDemo, setSelectedDemo] = useState<'betting_phase' | 'reveal_phase' | 'c_streak'>('betting_phase');
   const [showFloatingBot, setShowFloatingBot] = useState<boolean>(true);
   const [dragOver, setDragOver] = useState<boolean>(false);
+  const [showPermissionModal, setShowPermissionModal] = useState<boolean>(false);
+  const [isPiPActive, setIsPiPActive] = useState<boolean>(false);
+
+  const [permissionCheckState, setPermissionCheckState] = useState<{
+    camera: 'idle' | 'checking' | 'granted' | 'denied';
+    screen: 'idle' | 'supported' | 'unsupported';
+    pip: 'idle' | 'supported' | 'unsupported';
+  }>({
+    camera: 'idle',
+    screen: 'idle',
+    pip: 'idle',
+  });
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const mobileCameraInputRef = useRef<HTMLInputElement | null>(null);
   const autoScanTimerRef = useRef<any>(null);
 
   // Load initial demo scene (exact betting phase from user screenshot)
   useEffect(() => {
     const demo = generatePoppoLiveDemoScene('betting_phase');
     setCurrentImage(demo);
+  }, []);
+
+  // Listen for Picture-in-Picture state changes
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const onEnterPiP = () => setIsPiPActive(true);
+    const onLeavePiP = () => setIsPiPActive(false);
+
+    video.addEventListener('enterpictureinpicture', onEnterPiP);
+    video.addEventListener('leavepictureinpicture', onLeavePiP);
+
+    return () => {
+      video.removeEventListener('enterpictureinpicture', onEnterPiP);
+      video.removeEventListener('leavepictureinpicture', onLeavePiP);
+    };
   }, []);
 
   // Stop video stream
@@ -61,21 +100,17 @@ export const VisionScanner: React.FC<VisionScannerProps> = ({
     setStreamActive(false);
   }, []);
 
-  const mobileCameraInputRef = useRef<HTMLInputElement | null>(null);
-
-  // Start Screen Capture (for phone mirror / desktop emulator)
+  // Start Screen Capture (for phone mirror / desktop emulator / Android MediaProjection)
   const startScreenCapture = async () => {
     try {
       stopStream();
 
-      // Feature-detect getDisplayMedia (mobile browsers & restricted iframes do not support it)
       if (!navigator?.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
         alert(
           lang === 'bn'
-            ? 'আপনার বর্তমান ব্রাউজার বা ডিভাইসে সরাসরি স্ক্রিন শেয়ার (getDisplayMedia) অপশনটি নেই। অনুগ্রহ করে "📷 ক্যামেরা" দিয়ে লাইভ ধরুন অথবা "🖼️ ছবি পেস্ট / তুলুন" দিয়ে স্ক্রিনশট দিন।'
-            : 'Screen capture is not supported on this mobile device/browser. Please use Camera or Screenshot Upload instead.'
+            ? 'আপনার বর্তমান ব্রাউজার বা ডিভাইসে সরাসরি ডিসপ্লে শেয়ার অপশনটি সক্রিয় নেই। অনুগ্রহ করে "📷 ক্যামেরা" দিয়ে লাইভ ধরুন অথবা "📁 স্ক্রিনশট" বা "📋 পেস্ট" ব্যবহার করুন।'
+            : 'Screen capture is not supported on this mobile device/browser. Please use Camera or Screenshot Upload.'
         );
-        // Automatically switch to camera or upload mode
         setActiveMode('upload');
         fileInputRef.current?.click();
         return;
@@ -103,6 +138,99 @@ export const VisionScanner: React.FC<VisionScannerProps> = ({
     }
   };
 
+  // Start Camera Feed with mobile rear-camera preference
+  const startCameraCapture = async () => {
+    try {
+      stopStream();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setStreamActive(true);
+      setActiveMode('camera');
+      setPermissionCheckState((prev) => ({ ...prev, camera: 'granted' }));
+    } catch (err) {
+      console.warn('Camera stream unavailable, opening camera snapshot picker:', err);
+      setPermissionCheckState((prev) => ({ ...prev, camera: 'denied' }));
+      mobileCameraInputRef.current?.click();
+    }
+  };
+
+  // Picture-in-Picture (PiP) toggle - allows the video and bot to float directly over Poppo Live
+  const togglePictureInPicture = async () => {
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+        setIsPiPActive(false);
+        return;
+      }
+
+      if (!videoRef.current) return;
+
+      if (!streamActive) {
+        // If no active live stream, render current image to a canvas stream so user can pop it out over Poppo Live
+        const canvas = document.createElement('canvas');
+        canvas.width = 480;
+        canvas.height = 720;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = async () => {
+            ctx.drawImage(img, 0, 0, 480, 720);
+            const stream = (canvas as any).captureStream ? (canvas as any).captureStream(10) : null;
+            if (stream && videoRef.current) {
+              videoRef.current.srcObject = stream;
+              await videoRef.current.play();
+              await videoRef.current.requestPictureInPicture();
+              setIsPiPActive(true);
+            }
+          };
+          img.src = currentImage || generatePoppoLiveDemoScene('betting_phase');
+        }
+      } else {
+        await videoRef.current.requestPictureInPicture();
+        setIsPiPActive(true);
+      }
+    } catch (err) {
+      console.warn('PiP error:', err);
+      alert(
+        lang === 'bn'
+          ? 'পিকচার-ইন-পিকচার চালু করতে প্রথমে 📷 ক্যামেরা বা 🔴 স্ক্রিন শেয়ার চালু করুন।'
+          : 'To activate Picture-in-Picture, please start Camera or Screen Share first.'
+      );
+    }
+  };
+
+  // Test and Request mobile permissions inside modal
+  const handleTestMobilePermissions = async () => {
+    setPermissionCheckState((prev) => ({ ...prev, camera: 'checking' }));
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      stream.getTracks().forEach((t) => t.stop());
+      setPermissionCheckState((prev) => ({ ...prev, camera: 'granted' }));
+    } catch {
+      setPermissionCheckState((prev) => ({ ...prev, camera: 'denied' }));
+    }
+
+    const screenSupported = typeof navigator?.mediaDevices?.getDisplayMedia === 'function';
+    setPermissionCheckState((prev) => ({
+      ...prev,
+      screen: screenSupported ? 'supported' : 'unsupported',
+    }));
+
+    const pipSupported = 'pictureInPictureEnabled' in document && document.pictureInPictureEnabled;
+    setPermissionCheckState((prev) => ({
+      ...prev,
+      pip: pipSupported ? 'supported' : 'unsupported',
+    }));
+  };
+
   // One-click clipboard image paste
   const handlePasteClipboard = async () => {
     try {
@@ -119,32 +247,9 @@ export const VisionScanner: React.FC<VisionScannerProps> = ({
           }
         }
       }
-      // If clipboard read not permitted or empty, open file picker
       fileInputRef.current?.click();
     } catch {
       fileInputRef.current?.click();
-    }
-  };
-
-  // Start Camera Feed
-  const startCameraCapture = async () => {
-    try {
-      stopStream();
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-      setStreamActive(true);
-      setActiveMode('camera');
-    } catch (err) {
-      console.warn('Camera stream unavailable, opening camera snapshot picker:', err);
-      // Fallback to native device camera photo capture
-      mobileCameraInputRef.current?.click();
     }
   };
 
@@ -236,7 +341,6 @@ export const VisionScanner: React.FC<VisionScannerProps> = ({
     autoScanTimerRef.current = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
-          // Schedule trigger outside of React state update / render cycle
           setTimeout(() => {
             if (!isLoadingRef.current) {
               triggerAnalyzeRef.current();
@@ -266,13 +370,23 @@ export const VisionScanner: React.FC<VisionScannerProps> = ({
           </div>
           <p className="text-xs text-slate-400 mt-0.5">
             {lang === 'bn'
-              ? 'গেমের স্ক্রিনের উপরে এআই "ছোট গোল বট" সরাসরি সিগনাল দিবে'
-              : 'Floating circular bot widget sits directly over game screen'}
+              ? 'Poppo Live মোবাইল অ্যাপসের পারমিশন নিয়ে গেম সিন সরাসরি স্ক্যান ও বাবল প্রেডিকশন'
+              : 'Direct mobile app permissions to capture & scan Poppo Live scene with floating AI HUD'}
           </p>
         </div>
 
         {/* Source Mode Buttons: Live First */}
         <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-950/70 border border-slate-800 rounded-xl">
+          {/* Mobile Permissions Modal Trigger */}
+          <button
+            onClick={() => setShowPermissionModal(true)}
+            className="px-2.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-md shadow-emerald-950/40 hover:from-emerald-500 hover:to-teal-600 animate-pulse"
+            title="মোবাইল পারমিশন ও Poppo Live সরাসরি স্ক্যান গাইড"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-200" />
+            <span>{lang === 'bn' ? '📱 মোবাইল পারমিশন' : '📱 App Permissions'}</span>
+          </button>
+
           <button
             onClick={startScreenCapture}
             className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all ${
@@ -282,7 +396,7 @@ export const VisionScanner: React.FC<VisionScannerProps> = ({
             }`}
           >
             <Monitor className="w-3.5 h-3.5 text-blue-400" />
-            <span>{lang === 'bn' ? '🔴 লাইভ স্ক্রিন শেয়ার' : '🔴 Screen Share'}</span>
+            <span>{lang === 'bn' ? '🔴 স্ক্রিন শেয়ার' : '🔴 Screen Share'}</span>
           </button>
 
           <button
@@ -295,6 +409,20 @@ export const VisionScanner: React.FC<VisionScannerProps> = ({
           >
             <Camera className="w-3.5 h-3.5 text-rose-400" />
             <span>{lang === 'bn' ? '📷 ক্যামেরা' : '📷 Camera'}</span>
+          </button>
+
+          {/* Picture-in-Picture Toggle */}
+          <button
+            onClick={togglePictureInPicture}
+            className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all ${
+              isPiPActive
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/40 ring-1 ring-indigo-300'
+                : 'text-slate-300 hover:text-white bg-slate-900/60'
+            }`}
+            title="পিকচার-ইন-পিকচার: Poppo Live অ্যাপসের উপর ভাসমান উইন্ডো"
+          >
+            <PictureInPicture2 className="w-3.5 h-3.5 text-indigo-400" />
+            <span>{lang === 'bn' ? '🪟 ভাসমান PiP' : '🪟 Floating PiP'}</span>
           </button>
 
           <button
@@ -460,6 +588,14 @@ export const VisionScanner: React.FC<VisionScannerProps> = ({
           </span>
         </div>
 
+        {/* Floating PiP Indicator Badge */}
+        {isPiPActive && (
+          <div className="absolute top-2 right-2 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-900/90 border border-indigo-400/60 text-[11px] text-indigo-200 shadow-md">
+            <PictureInPicture2 className="w-3 h-3 text-indigo-300" />
+            <span>{lang === 'bn' ? 'ভাসমান PiP মোড চালু' : 'Floating PiP Active'}</span>
+          </div>
+        )}
+
         {/* THE FLOATING ROUND BUBBLE BOT (ছোট গোল আকারে scene উপরে) */}
         {showFloatingBot && (
           <FloatingRoundBot
@@ -540,6 +676,231 @@ export const VisionScanner: React.FC<VisionScannerProps> = ({
           </button>
         </div>
       </div>
+
+      {/* POPPO LIVE MOBILE PERMISSION & SCENE SCANNER MODAL */}
+      {showPermissionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="relative w-full max-w-lg bg-slate-950 border-2 border-emerald-500/60 rounded-3xl p-5 sm:p-6 shadow-2xl text-slate-100 max-h-[90vh] overflow-y-auto">
+            {/* Close Button */}
+            <button
+              onClick={() => setShowPermissionModal(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-full bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Modal Header */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-700 flex items-center justify-center shadow-lg shadow-emerald-950/50">
+                <Smartphone className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black bg-gradient-to-r from-emerald-300 via-teal-200 to-amber-200 bg-clip-text text-transparent">
+                  {lang === 'bn'
+                    ? 'মোবাইল পারমিশন ও Poppo Live সরাসরি স্ক্যানার'
+                    : 'Mobile App Permissions & Poppo Live Scene Scanner'}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  {lang === 'bn'
+                    ? 'Poppo Live অ্যাপস স্ক্রিন সরাসরি দেখতে যা যা অনুমতি প্রয়োজন'
+                    : 'Permissions required to capture Poppo Live screen in real-time'}
+                </p>
+              </div>
+            </div>
+
+            {/* Permission Checklist Cards */}
+            <div className="space-y-3 mb-5">
+              {/* 1. Overlay / Display over other apps */}
+              <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-start gap-3">
+                <div className="p-2 rounded-xl bg-purple-950/80 border border-purple-500/40 text-purple-300 mt-0.5">
+                  <Layers className="w-4 h-4" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-white">
+                      {lang === 'bn' ? '১. অন্যান্য অ্যাপের উপরে প্রদর্শন (Overlay)' : '1. Display Over Other Apps'}
+                    </h4>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                      SYSTEM_ALERT_WINDOW
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    {lang === 'bn'
+                      ? 'Poppo Live অ্যাপ চলাকালীন বটের ছোট গোল বাবল স্ক্রিনের কোণায় ভেসে থাকবে যাতে আপনি এক ক্লিকেই সিগনাল দেখতে পান।'
+                      : 'Allows the round bot widget to float over Poppo Live app during gameplay.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* 2. Media Projection & Screen Capture */}
+              <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-start gap-3">
+                <div className="p-2 rounded-xl bg-blue-950/80 border border-blue-500/40 text-blue-300 mt-0.5">
+                  <Monitor className="w-4 h-4" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-white">
+                      {lang === 'bn' ? '২. সরাসরি স্ক্রিন ক্যাপচার ও রেকর্ড' : '2. Direct Screen Capture (MediaProjection)'}
+                    </h4>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-bold border border-blue-500/30">
+                      MEDIA_PROJECTION
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    {lang === 'bn'
+                      ? 'মোবাইলের "Start recording or casting with Poppo Live Bot" ডায়লগে "Start Now" দিলে সরাসরি Poppo Live এর টেবিল সিন স্ক্যান হয়।'
+                      : 'Captures the active Poppo Live Golden Flower round for instant OCR & AI analysis.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* 3. Picture-in-Picture (PiP) */}
+              <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-start gap-3">
+                <div className="p-2 rounded-xl bg-indigo-950/80 border border-indigo-500/40 text-indigo-300 mt-0.5">
+                  <PictureInPicture2 className="w-4 h-4" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-white">
+                      {lang === 'bn' ? '৩. পিকচার-ইন-পিকচার (PiP ভাসমান উইন্ডো)' : '3. Picture-in-Picture (PiP Mode)'}
+                    </h4>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30">
+                      PiP ENABLED
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    {lang === 'bn'
+                      ? 'PiP চালু করলে বটের লাইভ মনিটর ছোট হয়ে ফোনের স্ক্রিনের উপরে ভেসে থাকে, আপনি নিচে Poppo Live এ কয়েন ধরবেন।'
+                      : 'Floats the live bot view over the Poppo Live app window so you can bet without switching apps.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* 4. Camera Permission */}
+              <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-start gap-3">
+                <div className="p-2 rounded-xl bg-rose-950/80 border border-rose-500/40 text-rose-300 mt-0.5">
+                  <Camera className="w-4 h-4" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-white">
+                      {lang === 'bn' ? '৪. ক্যামেরা দিয়ে অন্য ডিভাইস স্ক্যান' : '4. Camera Permission'}
+                    </h4>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30">
+                      CAMERA
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    {lang === 'bn'
+                      ? 'আপনি যদি অন্য একটি ফোনে Poppo Live খেলেন, এই ফোনটির ক্যামেরা দিয়ে সরাসরি লাইভ টেবিল ধরলে স্বয়ংক্রিয় স্ক্যান হবে।'
+                      : 'Scan another phone playing Poppo Live using direct rear camera feed.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Test Permissions Action Button */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-950/50 via-teal-950/40 to-slate-900 border border-emerald-500/40 mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-emerald-200">
+                  {lang === 'bn' ? 'অনুমতি যাচাই ও টেস্ট করুন:' : 'Check & Trigger Permissions:'}
+                </span>
+                <button
+                  onClick={handleTestMobilePermissions}
+                  className="px-3 py-1 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-md flex items-center gap-1"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>{lang === 'bn' ? 'অনুমতি টেস্ট' : 'Test Permissions'}</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-mono">
+                <div className="p-1.5 rounded-lg bg-slate-900 border border-slate-800">
+                  <span className="text-slate-400 block">ক্যামেরা</span>
+                  <span
+                    className={`font-bold ${
+                      permissionCheckState.camera === 'granted'
+                        ? 'text-emerald-400'
+                        : permissionCheckState.camera === 'denied'
+                        ? 'text-rose-400'
+                        : 'text-amber-400'
+                    }`}
+                  >
+                    {permissionCheckState.camera === 'granted'
+                      ? '✓ সচল'
+                      : permissionCheckState.camera === 'denied'
+                      ? '✗ বন্ধ'
+                      : 'অপেক্ষমাণ'}
+                  </span>
+                </div>
+
+                <div className="p-1.5 rounded-lg bg-slate-900 border border-slate-800">
+                  <span className="text-slate-400 block">স্ক্রিন ক্যাপচার</span>
+                  <span
+                    className={`font-bold ${
+                      permissionCheckState.screen === 'supported' ? 'text-emerald-400' : 'text-blue-400'
+                    }`}
+                  >
+                    {permissionCheckState.screen === 'supported' ? '✓ প্রস্তুত' : 'উপলব্ধ'}
+                  </span>
+                </div>
+
+                <div className="p-1.5 rounded-lg bg-slate-900 border border-slate-800">
+                  <span className="text-slate-400 block">ভাসমান PiP</span>
+                  <span
+                    className={`font-bold ${
+                      permissionCheckState.pip === 'supported' ? 'text-emerald-400' : 'text-indigo-400'
+                    }`}
+                  >
+                    {permissionCheckState.pip === 'supported' ? '✓ সক্ষম' : 'প্রস্তুত'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Launch Buttons for Poppo Live */}
+            <div className="flex flex-col sm:flex-row gap-2.5">
+              <button
+                onClick={() => {
+                  setShowPermissionModal(false);
+                  startScreenCapture();
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl font-bold text-xs bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center gap-1.5 shadow-lg shadow-blue-950 transition-all"
+              >
+                <Monitor className="w-4 h-4" />
+                <span>{lang === 'bn' ? 'সরাসরি স্ক্রিন ক্যাপচার' : 'Start Screen Capture'}</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowPermissionModal(false);
+                  startCameraCapture();
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl font-bold text-xs bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center gap-1.5 shadow-lg shadow-rose-950 transition-all"
+              >
+                <Camera className="w-4 h-4" />
+                <span>{lang === 'bn' ? 'ক্যামেরা স্ক্যান শুরু' : 'Start Camera Scan'}</span>
+              </button>
+            </div>
+
+            {/* APK Download Footer */}
+            <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between">
+              <span className="text-[11px] text-slate-400">
+                অফিসিয়াল অ্যান্ড্রয়েড APK প্যাকেজ: <strong className="text-emerald-400">v1.0.7</strong>
+              </span>
+              <a
+                href="https://github.com/kv8628001-svg/Bot-/releases/download/v1.0.7/PoppoLive-GoldenFlower-AI-Bot.apk"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-bold text-amber-300 hover:text-amber-200 flex items-center gap-1 underline"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>APK ডাউনলোড করুন</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
