@@ -1,0 +1,27 @@
+{
+  "id": "/",
+  "name": "Poppo Live Golden Flower AI Predictor",
+  "short_name": "PoppoBot",
+  "description": "Android AI Assistant & Predictor for Poppo Live Golden Flower game with floating bubble widget and live A, B, C signals.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#050b18",
+  "theme_color": "#0a1128",
+  "categories": ["entertainment", "games", "utilities"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
