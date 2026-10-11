@@ -941,21 +941,7 @@ export const VisionScanner: React.FC<VisionScannerProps> = ({
               </button>
             </div>
 
-            {/* APK Download Footer */}
-            <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between">
-              <span className="text-[11px] text-slate-400">
-                অফিসিয়াল অ্যান্ড্রয়েড APK প্যাকেজ: <strong className="text-emerald-400">সর্বশেষ সংস্করণ</strong>
-              </span>
-              <a
-                href="https://github.com/kv8628001-svg/Bot-/releases/latest/download/PoppoLive-GoldenFlower-AI-Bot.apk"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs font-bold text-amber-300 hover:text-amber-200 flex items-center gap-1 underline"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>APK ডাউনলোড করুন</span>
-              </a>
-            </div>
+
           </div>
         </div>
       )}
