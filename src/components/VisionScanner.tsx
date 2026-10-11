@@ -22,12 +22,14 @@ import {
 } from 'lucide-react';
 import { generatePoppoLiveDemoScene } from '../utils/goldenFlowerOdds';
 import { FloatingRoundBot } from './FloatingRoundBot';
-import { PredictionData } from '../types';
+import { PredictionData, ScanErrorState } from '../types';
 
 interface VisionScannerProps {
   onAnalyze: (base64Image: string) => Promise<void>;
   isLoading: boolean;
   prediction: PredictionData | null;
+  scanError?: ScanErrorState | null;
+  onResetSignal?: () => void;
   lang: 'bn' | 'en';
 }
 
@@ -35,6 +37,8 @@ export const VisionScanner: React.FC<VisionScannerProps> = ({
   onAnalyze,
   isLoading,
   prediction,
+  scanError,
+  onResetSignal,
   lang,
 }) => {
   const [activeMode, setActiveMode] = useState<'demo' | 'screen' | 'camera' | 'upload'>('demo');
@@ -604,6 +608,7 @@ export const VisionScanner: React.FC<VisionScannerProps> = ({
             roundCountdown={countdown}
             lang={lang}
             onForceScan={handleTriggerAnalyze}
+            onResetSignal={onResetSignal}
           />
         )}
 
@@ -639,6 +644,17 @@ export const VisionScanner: React.FC<VisionScannerProps> = ({
 
         {/* Toggle Floating Bot Visibility */}
         <div className="flex items-center gap-2">
+          {onResetSignal && (
+            <button
+              onClick={onResetSignal}
+              className="px-2.5 py-2 rounded-xl text-xs font-semibold border border-slate-800 bg-slate-900 text-slate-400 hover:text-slate-200 transition-all flex items-center gap-1"
+              title="বর্তমান সিগনাল ক্লিয়ার করুন"
+            >
+              <RefreshCw className="w-3 h-3 text-slate-400" />
+              <span>{lang === 'bn' ? 'ক্লিয়ার' : 'Clear'}</span>
+            </button>
+          )}
+
           <button
             onClick={() => setShowFloatingBot(!showFloatingBot)}
             className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
@@ -654,6 +670,7 @@ export const VisionScanner: React.FC<VisionScannerProps> = ({
 
           {/* Primary Action Button */}
           <button
+            id="primary-scan-trigger-btn"
             onClick={handleTriggerAnalyze}
             disabled={isLoading}
             className={`flex-1 sm:flex-initial px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-lg select-none ${
@@ -886,10 +903,10 @@ export const VisionScanner: React.FC<VisionScannerProps> = ({
             {/* APK Download Footer */}
             <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between">
               <span className="text-[11px] text-slate-400">
-                অফিসিয়াল অ্যান্ড্রয়েড APK প্যাকেজ: <strong className="text-emerald-400">v1.0.7</strong>
+                অফিসিয়াল অ্যান্ড্রয়েড APK প্যাকেজ: <strong className="text-emerald-400">সর্বশেষ সংস্করণ</strong>
               </span>
               <a
-                href="https://github.com/kv8628001-svg/Bot-/releases/download/v1.0.7/PoppoLive-GoldenFlower-AI-Bot.apk"
+                href="https://github.com/kv8628001-svg/Bot-/releases/latest/download/PoppoLive-GoldenFlower-AI-Bot.apk"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs font-bold text-amber-300 hover:text-amber-200 flex items-center gap-1 underline"

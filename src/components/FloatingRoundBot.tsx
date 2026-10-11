@@ -10,6 +10,10 @@ import {
   CheckCircle,
   AlertCircle,
   Radio,
+  Eye,
+  Camera,
+  ShieldCheck,
+  RefreshCw,
 } from 'lucide-react';
 import { PredictionData, HouseWinner } from '../types';
 import { speakBangla, playAlertChime } from '../utils/goldenFlowerOdds';
@@ -20,6 +24,7 @@ interface FloatingRoundBotProps {
   roundCountdown: number;
   lang: 'bn' | 'en';
   onForceScan: () => void;
+  onResetSignal?: () => void;
 }
 
 export const FloatingRoundBot: React.FC<FloatingRoundBotProps> = ({
@@ -28,6 +33,7 @@ export const FloatingRoundBot: React.FC<FloatingRoundBotProps> = ({
   roundCountdown,
   lang,
   onForceScan,
+  onResetSignal,
 }) => {
   // Draggable state (relative position within parent container)
   const [position, setPosition] = useState<{ x: number; y: number }>({ x: 20, y: 30 });
@@ -101,14 +107,41 @@ export const FloatingRoundBot: React.FC<FloatingRoundBotProps> = ({
     };
   }, [isDragging, dragOffset]);
 
-  // House theme based on top recommendation
-  const rec = prediction?.recommendedHouse || 'B';
-  const recColor =
-    rec === 'A'
-      ? { ring: 'ring-blue-500', glow: 'shadow-blue-500/50', bg: 'from-blue-600 to-indigo-700', text: 'text-blue-400', badge: 'bg-blue-500' }
-      : rec === 'B'
-      ? { ring: 'ring-emerald-500', glow: 'shadow-emerald-500/50', bg: 'from-emerald-600 to-teal-700', text: 'text-emerald-400', badge: 'bg-emerald-500' }
-      : { ring: 'ring-orange-500', glow: 'shadow-orange-500/50', bg: 'from-orange-500 to-amber-700', text: 'text-orange-400', badge: 'bg-orange-500' };
+  // House theme based on genuine recommendation (or neutral ready theme if none)
+  const hasSignal = Boolean(prediction);
+  const rec = prediction?.recommendedHouse;
+
+  const themeColor = !hasSignal
+    ? {
+        ring: 'ring-cyan-500/50',
+        glow: 'shadow-cyan-500/30',
+        bg: 'from-cyan-600/60 to-blue-700/60',
+        text: 'text-cyan-400',
+        badge: 'bg-cyan-500',
+      }
+    : rec === 'A'
+    ? {
+        ring: 'ring-blue-500',
+        glow: 'shadow-blue-500/50',
+        bg: 'from-blue-600 to-indigo-700',
+        text: 'text-blue-400',
+        badge: 'bg-blue-500',
+      }
+    : rec === 'B'
+    ? {
+        ring: 'ring-emerald-500',
+        glow: 'shadow-emerald-500/50',
+        bg: 'from-emerald-600 to-teal-700',
+        text: 'text-emerald-400',
+        badge: 'bg-emerald-500',
+      }
+    : {
+        ring: 'ring-orange-500',
+        glow: 'shadow-orange-500/50',
+        bg: 'from-orange-500 to-amber-700',
+        text: 'text-orange-400',
+        badge: 'bg-orange-500',
+      };
 
   return (
     <div
@@ -124,45 +157,64 @@ export const FloatingRoundBot: React.FC<FloatingRoundBotProps> = ({
         <div className="relative group">
           {/* Animated pulse ring around the round bot */}
           <div
-            className={`absolute -inset-1.5 rounded-full bg-gradient-to-tr ${recColor.bg} opacity-75 blur-sm animate-pulse`}
+            className={`absolute -inset-1.5 rounded-full bg-gradient-to-tr ${themeColor.bg} opacity-75 blur-sm animate-pulse`}
           />
 
           {/* Circular Bot Body */}
           <div
             onClick={() => setIsExpanded(true)}
-            className={`relative w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-slate-950/95 border-2 border-white/20 p-1 flex flex-col items-center justify-center shadow-2xl backdrop-blur-xl ${recColor.glow} transition-transform active:scale-95`}
+            className={`relative w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-slate-950/95 border-2 border-white/20 p-1 flex flex-col items-center justify-center shadow-2xl backdrop-blur-xl ${themeColor.glow} transition-transform active:scale-95`}
           >
-            {/* Top tiny round countdown & live dot */}
+            {/* Top tiny status pill */}
             <div className="absolute -top-1.5 px-2 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-[10px] font-bold text-amber-300 flex items-center gap-1 shadow-md">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-              <span>{roundCountdown}s</span>
+              <span className={`w-1.5 h-1.5 rounded-full ${hasSignal ? 'bg-emerald-400 animate-ping' : 'bg-cyan-400'}`} />
+              <span>{hasSignal ? `${roundCountdown}s` : 'READY'}</span>
             </div>
 
-            {/* Main Predicted House Big Badge */}
+            {/* Main Predicted House or Standby Icon */}
             {isLoading ? (
               <div className="flex flex-col items-center justify-center">
                 <Sparkles className="w-6 h-6 text-amber-400 animate-spin" />
                 <span className="text-[9px] text-amber-300 font-bold mt-1">স্ক্যান...</span>
               </div>
-            ) : (
+            ) : hasSignal && rec ? (
               <div className="text-center">
                 <span className="text-[10px] text-slate-400 uppercase font-bold block leading-none">
-                  {lang === 'bn' ? 'ঘর' : 'BOX'}
+                  {lang === 'bn' ? 'ঘর' : 'HOUSE'}
                 </span>
-                <span className={`text-2xl sm:text-3xl font-black italic tracking-tight ${recColor.text} drop-shadow-md`}>
+                <span className={`text-2xl sm:text-3xl font-black italic tracking-tight ${themeColor.text} drop-shadow-md`}>
                   {rec}
                 </span>
                 <span className="text-xs font-black text-white font-mono block -mt-0.5">
-                  {prediction ? `${prediction.confidencePercent}%` : '58%'}
+                  {prediction.confidencePercent}%
+                </span>
+              </div>
+            ) : (
+              <div className="text-center flex flex-col items-center">
+                <Eye className="w-5 h-5 text-cyan-400 mb-0.5 animate-pulse" />
+                <span className="text-[10px] font-black text-cyan-300 tracking-wider">
+                  SCAN
+                </span>
+                <span className="text-[8px] text-slate-400 font-semibold leading-none">
+                  রেডি
                 </span>
               </div>
             )}
 
-            {/* Bottom mini percentages preview: A | B | C */}
-            <div className="absolute -bottom-2 bg-slate-900/90 border border-slate-700/80 px-2 py-0.5 rounded-full flex items-center gap-1.5 text-[9px] font-bold shadow-md">
-              <span className="text-blue-400">A:{prediction?.probabilityA || 25}%</span>
-              <span className="text-emerald-400">B:{prediction?.probabilityB || 58}%</span>
-              <span className="text-orange-400">C:{prediction?.probabilityC || 17}%</span>
+            {/* Bottom mini status badge */}
+            <div className="absolute -bottom-2 bg-slate-900/90 border border-slate-700/80 px-2 py-0.5 rounded-full flex items-center gap-1 text-[9px] font-bold shadow-md">
+              {hasSignal && prediction ? (
+                <>
+                  <span className="text-blue-400">A:{prediction.probabilityA}%</span>
+                  <span className="text-emerald-400">B:{prediction.probabilityB}%</span>
+                  <span className="text-orange-400">C:{prediction.probabilityC}%</span>
+                </>
+              ) : (
+                <span className="text-emerald-400 font-mono flex items-center gap-1">
+                  <ShieldCheck className="w-2.5 h-2.5" />
+                  <span>জিরো-ফেক</span>
+                </span>
+              )}
             </div>
 
             {/* Expand hover prompt */}
@@ -182,15 +234,25 @@ export const FloatingRoundBot: React.FC<FloatingRoundBotProps> = ({
               </div>
               <div>
                 <h4 className="text-xs font-bold text-white flex items-center gap-1">
-                  <span>{lang === 'bn' ? 'গোল্ডেন ফ্লাওয়ার এআই সিগনাল' : 'Golden Flower AI Radar'}</span>
+                  <span>{lang === 'bn' ? 'গোল্ডেন ফ্লাওয়ার এআই বাবল' : 'Golden Flower AI Bubble'}</span>
                 </h4>
                 <span className="text-[10px] text-emerald-400 font-mono">
-                  ● {lang === 'bn' ? 'লাইভ রাউন্ড সিঙ্ক' : 'Live Round Sync'}
+                  ● {hasSignal ? (lang === 'bn' ? 'লাইভ সিগনাল সক্রিয়' : 'Live Signal Active') : (lang === 'bn' ? 'স্ট্যান্ডবাই — জিরো ফেক' : 'Standby Mode')}
                 </span>
               </div>
             </div>
 
             <div className="flex items-center gap-1">
+              {/* Reset button */}
+              {hasSignal && onResetSignal && (
+                <button
+                  onClick={onResetSignal}
+                  className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                  title="সিগনাল ক্লিয়ার করুন"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+              )}
               {/* Voice button */}
               {prediction?.banglaVoiceAlert && (
                 <button
@@ -212,98 +274,81 @@ export const FloatingRoundBot: React.FC<FloatingRoundBotProps> = ({
             </div>
           </div>
 
-          {/* Hero Signal Badge */}
-          <div className="mb-3 p-3 rounded-2xl bg-slate-900/90 border border-slate-800 flex items-center justify-between">
-            <div>
-              <span className="text-[10px] text-slate-400 font-semibold block uppercase">
-                {lang === 'bn' ? 'সর্বোচ্চ সম্ভাব্য ঘর' : 'Strongest Signal House'}
-              </span>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className={`text-2xl font-black italic ${recColor.text}`}>
-                  {lang === 'bn' ? `ঘর ${rec}` : `HOUSE ${rec}`}
-                </span>
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  x2.98
-                </span>
-              </div>
-            </div>
+          {/* Body */}
+          {hasSignal && prediction && rec ? (
+            <>
+              {/* Hero Signal Badge */}
+              <div className="mb-3 p-3 rounded-2xl bg-slate-900/90 border border-slate-800 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-semibold block uppercase">
+                    {lang === 'bn' ? 'সর্বোচ্চ সম্ভাব্য ঘর' : 'Strongest Signal House'}
+                  </span>
+                  <div className="text-xl font-black text-white flex items-center gap-1.5 mt-0.5">
+                    <span className={themeColor.text}>
+                      {lang === 'bn' ? `ঘর ${rec}` : `House ${rec}`}
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">
+                      x2.98
+                    </span>
+                  </div>
+                </div>
 
-            <div className="text-right">
-              <span className="text-[10px] text-slate-400 block font-medium">
-                {lang === 'bn' ? 'জেতার সম্ভাবনা' : 'Win Prob.'}
-              </span>
-              <span className="text-2xl font-black text-white font-mono">
-                {prediction ? `${prediction.confidencePercent}%` : '58%'}
-              </span>
-            </div>
-          </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-slate-400 block uppercase font-semibold">
+                    {lang === 'bn' ? 'সম্ভাবনা' : 'Odds'}
+                  </span>
+                  <span className="text-xl font-black text-emerald-400">
+                    {prediction.confidencePercent}%
+                  </span>
+                </div>
+              </div>
 
-          {/* 3 Houses Probability Bars: A, B, C */}
-          <div className="space-y-2 mb-3">
-            {/* House A */}
-            <div>
-              <div className="flex items-center justify-between text-xs font-bold mb-0.5">
-                <span className="text-blue-400">A (House A - Blue)</span>
-                <span className="text-blue-300 font-mono">{prediction?.probabilityA || 25}%</span>
+              {/* Mini 3-Houses Progress Bars */}
+              <div className="space-y-1.5 mb-3 text-xs">
+                <div className="flex items-center justify-between font-bold text-[11px]">
+                  <span className="text-blue-400">House A: {prediction.probabilityA}%</span>
+                  <span className="text-emerald-400">House B: {prediction.probabilityB}%</span>
+                  <span className="text-orange-400">House C: {prediction.probabilityC}%</span>
+                </div>
+                <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden flex border border-slate-800">
+                  <div className="h-full bg-blue-500" style={{ width: `${prediction.probabilityA}%` }} />
+                  <div className="h-full bg-emerald-500" style={{ width: `${prediction.probabilityB}%` }} />
+                  <div className="h-full bg-orange-500" style={{ width: `${prediction.probabilityC}%` }} />
+                </div>
               </div>
-              <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden p-[1px]">
-                <div
-                  className="h-full bg-blue-500 rounded-full transition-all duration-500"
-                  style={{ width: `${prediction?.probabilityA || 25}%` }}
-                />
-              </div>
-            </div>
 
-            {/* House B */}
-            <div>
-              <div className="flex items-center justify-between text-xs font-bold mb-0.5">
-                <span className="text-emerald-400">B (House B - Green)</span>
-                <span className="text-emerald-300 font-mono">{prediction?.probabilityB || 58}%</span>
-              </div>
-              <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden p-[1px]">
-                <div
-                  className="h-full bg-emerald-500 rounded-full transition-all duration-500"
-                  style={{ width: `${prediction?.probabilityB || 58}%` }}
-                />
-              </div>
-            </div>
-
-            {/* House C */}
-            <div>
-              <div className="flex items-center justify-between text-xs font-bold mb-0.5">
-                <span className="text-orange-400">C (House C - Orange)</span>
-                <span className="text-orange-300 font-mono">{prediction?.probabilityC || 17}%</span>
-              </div>
-              <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden p-[1px]">
-                <div
-                  className="h-full bg-orange-500 rounded-full transition-all duration-500"
-                  style={{ width: `${prediction?.probabilityC || 17}%` }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Bengali Voice announcement text preview */}
-          {prediction?.banglaVoiceAlert && (
-            <div className="p-2 bg-slate-900/60 border border-slate-800 rounded-xl text-[11px] text-amber-200/90 leading-tight mb-3">
-              🗣️ "{prediction.banglaVoiceAlert}"
+              {/* Bangla Alert text */}
+              <p className="text-[11px] text-slate-300 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80 leading-relaxed mb-3">
+                {prediction.banglaVoiceAlert}
+              </p>
+            </>
+          ) : (
+            /* Standby State inside Bubble */
+            <div className="my-3 p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 text-center flex flex-col items-center">
+              <Eye className="w-6 h-6 text-cyan-400 mb-2 animate-pulse" />
+              <h5 className="text-xs font-bold text-white mb-1">
+                {lang === 'bn' ? 'কোনো ভুয়া সিগনাল নেই — স্ট্যান্ডবাই' : 'Standby — Zero Fake Signals'}
+              </h5>
+              <p className="text-[11px] text-slate-400 leading-relaxed mb-3">
+                {lang === 'bn'
+                  ? 'সঠিক প্রেডিকশন পেতে ক্যামেরা বা স্ক্রিনশটের মাধ্যমে Poppo Live স্ক্রিনটি স্ক্যান করুন।'
+                  : 'Scan the Poppo Live screen via camera or screenshot to get real-time predictions.'}
+              </p>
             </div>
           )}
 
-          {/* Trigger Scan Button & Drag hint */}
-          <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/80">
-            <span className="text-[10px] text-slate-500 flex items-center gap-1">
-              <Move className="w-3 h-3 text-slate-400" />
-              <span>{lang === 'bn' ? 'যেকোনো জায়গায় টেনে নিন' : 'Drag anywhere'}</span>
-            </span>
-
+          {/* Actions Footer */}
+          <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
             <button
-              onClick={onForceScan}
+              onClick={() => {
+                onForceScan();
+                playAlertChime('predict');
+              }}
               disabled={isLoading}
-              className="px-3 py-1 rounded-lg text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white transition-colors flex items-center gap-1"
+              className="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-950 transition-all active:scale-95"
             >
-              <Sparkles className="w-3 h-3" />
-              <span>{isLoading ? (lang === 'bn' ? 'স্ক্যান...' : 'Scanning...') : (lang === 'bn' ? 'নতুন স্ক্যান' : 'Rescan')}</span>
+              <Camera className="w-3.5 h-3.5" />
+              <span>{isLoading ? (lang === 'bn' ? 'স্ক্যান হচ্ছে...' : 'Scanning...') : (lang === 'bn' ? 'এখনই স্ক্যান করুন' : 'Scan Live Screen')}</span>
             </button>
           </div>
         </div>

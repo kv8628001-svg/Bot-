@@ -17,6 +17,10 @@ export interface PredictionData {
   probabilityB: number; // e.g. 58
   probabilityC: number; // e.g. 17
   confidencePercent: number; // e.g. 58
+  isAuthenticScan?: boolean; // True when from real visual OCR or verifiable user history
+  sourceMode?: 'vision_ai' | 'roadmap_math' | 'demo';
+  isValidPoppoScene?: boolean;
+  invalidReason?: string;
   detectedSceneProof?: {
     detectedPhase: string;
     detectedPots: string;
@@ -35,6 +39,13 @@ export interface PredictionData {
   banglaAnalysis: string;
   banglaVoiceAlert: string; // e.g. 'নতুন রাউন্ড শুরু! B জেতার সম্ভাবনা ৫৮%, A ২৫%, C ১৭%। B ঘরে বাজি ধরুন!'
   keySignals: string[];
+}
+
+export interface ScanErrorState {
+  hasError: boolean;
+  title: string;
+  message: string;
+  reason?: string;
 }
 
 export interface ChatMessage {

@@ -5,28 +5,39 @@ import {
   Volume2,
   AlertTriangle,
   CheckCircle,
-  HelpCircle,
+  ShieldCheck,
   ShieldAlert,
   Flame,
   PlusCircle,
   Coins,
+  Camera,
+  RefreshCw,
+  Eye,
+  Info,
 } from 'lucide-react';
-import { PredictionData, HouseWinner } from '../types';
+import { PredictionData, HouseWinner, ScanErrorState } from '../types';
 import { speakBangla } from '../utils/goldenFlowerOdds';
 
 interface PredictionResultProps {
   prediction: PredictionData | null;
+  scanError?: ScanErrorState | null;
   isLoading: boolean;
   onRecordResult: (winner: HouseWinner, handType?: string) => void;
+  onResetSignal?: () => void;
+  onTriggerScan?: () => void;
   lang: 'bn' | 'en';
 }
 
 export const PredictionResult: React.FC<PredictionResultProps> = ({
   prediction,
+  scanError,
   isLoading,
   onRecordResult,
+  onResetSignal,
+  onTriggerScan,
   lang,
 }) => {
+  // 1. Loading State
   if (isLoading) {
     return (
       <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-xl text-center flex flex-col items-center justify-center min-h-[380px]">
@@ -42,39 +53,131 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
         </h3>
         <p className="text-xs text-slate-400 max-w-sm">
           {lang === 'bn'
-            ? 'A, B ও C এর পট চিপস, ডিলার কার্ড ও নিচের হিস্ট্রি লুদান বিশ্লেষণ হচ্ছে...'
-            : 'Evaluating House A, B, and C pots, dealer cards, and bottom roadmap...'}
+            ? 'A, B ও C এর পট চিপস, ডিলার কার্ড ও নিচের হিস্ট্রি লুদান যাচাই করা হচ্ছে (জিরো-ফেক পলিসি)...'
+            : 'Analyzing House A, B, and C pots, dealer cards, and bottom roadmap...'}
         </p>
       </div>
     );
   }
 
-  // Fallback default prediction if null
-  const data: PredictionData = prediction || {
-    recommendedHouse: 'B',
-    probabilityA: 25,
-    probabilityB: 58,
-    probabilityC: 17,
-    confidencePercent: 58,
-    likelyHandType: 'হাই কার্ড (High Card)',
-    trendPatternDetected: 'B এর বাউন্স ব্যাক ও C এর ড্রপ',
-    riskLevel: 'Low',
-    potAnalysis: {
-      potA: '15.5M',
-      potB: '10.3M',
-      potC: '6.8M',
-      biasWarning: 'Pot A তে অতিরিক্ত চিপস লোড করা হয়েছে, লাইভ অ্যালগরিদম B ও C এর দিকে ফেভার করতে পারে।',
-    },
-    banglaAnalysis:
-      'স্ক্রিনে দেখা যাচ্ছে Pot A তে ১৫.৫ মিলিয়ন কয়েন বাজি ধরা হয়েছে যা সবচেয়ে ভারী। পোপ্পো লাইভ গোল্ডেন ফ্লাওয়ারে অতিরিক্ত লোডেড পট এড়িয়ে চলা বুদ্ধিমানের কাজ। নিচের লুদান বারে দেখা যাচ্ছে B ঘরে শক্তিশালী রিভার্সাল ট্রেন্ড শুরু হয়েছে।',
-    banglaVoiceAlert: 'নতুন রাউন্ড শুরু! B জেতার সম্ভাবনা ৫৮%, A ২৫%, C ১৭%। B ঘরে বাজি ধরুন!',
-    keySignals: [
-      'Pot A তে ভারী ১৫.৫M কয়েন (ভারী চিপ ট্র্যাপ)',
-      'লুদান হিস্ট্রিতে B এর বাউন্স ব্যাক প্যাটার্ন',
-      'মাল্টিপ্লায়ার x2.98 এ B এর উইন রেশিও ইতিবাচক',
-    ],
-  };
+  // 2. Scan Error State (Anti-Fake Signal Guard Tripped)
+  if (scanError && scanError.hasError) {
+    return (
+      <div className="bg-slate-900/90 border-2 border-rose-500/50 rounded-2xl p-5 sm:p-6 shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/10 rounded-full blur-2xl pointer-events-none" />
 
+        <div className="flex items-center gap-2 mb-3 pb-3 border-b border-rose-500/20">
+          <ShieldAlert className="w-5 h-5 text-rose-400" />
+          <span className="text-xs font-bold text-rose-300 tracking-wide uppercase">
+            {scanError.title}
+          </span>
+          <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-rose-950 border border-rose-700/60 text-rose-300 font-mono font-bold">
+            🛡️ জিরো-ফেক গার্ড
+          </span>
+        </div>
+
+        <div className="my-4 p-4 rounded-xl bg-slate-950 border border-rose-900/50">
+          <p className="text-sm text-slate-200 leading-relaxed font-medium">
+            {scanError.message}
+          </p>
+          <p className="text-xs text-slate-400 mt-2">
+            {lang === 'bn'
+              ? 'বট কোনো অনুমান বা মনগড়া সিগনাল দেয় না। কেবল Poppo Live এর সঠিক ও স্পষ্ট গেম সিন পেলেই নিখুঁত প্রেডিকশন প্রদান করা হয়।'
+              : 'The bot will never fabricate fake signals. Only genuine and clearly verified game scenes will produce predictions.'}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 pt-2">
+          {onTriggerScan && (
+            <button
+              onClick={onTriggerScan}
+              className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white flex items-center gap-1.5 transition-all shadow-md shadow-rose-950"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              <span>{lang === 'bn' ? 'পুনরায় স্পষ্ট সিন স্ক্যান করুন' : 'Scan Clear Scene'}</span>
+            </button>
+          )}
+          {onResetSignal && (
+            <button
+              onClick={onResetSignal}
+              className="px-3 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all border border-slate-700"
+            >
+              {lang === 'bn' ? 'রিসেট' : 'Reset'}
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 3. Standby State (No fake signal active - awaiting authentic scan)
+  if (!prediction) {
+    return (
+      <div className="bg-slate-900/70 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
+        <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-800/80">
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide uppercase bg-slate-950 border border-slate-800 text-slate-300">
+              {lang === 'bn' ? 'লাইভ সিগনাল ড্যাশবোর্ড' : 'LIVE SIGNAL DASHBOARD'}
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-amber-500/10 text-amber-300 border-amber-500/30 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+              <span>{lang === 'bn' ? 'স্ট্যান্ডবাই' : 'STANDBY'}</span>
+            </span>
+          </div>
+
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-mono font-bold flex items-center gap-1">
+            <ShieldCheck className="w-3 h-3 text-emerald-400" />
+            <span>{lang === 'bn' ? 'জিরো-ফেক পলিসি' : 'Zero-Fake Policy'}</span>
+          </span>
+        </div>
+
+        <div className="my-5 p-5 rounded-2xl bg-slate-950/90 border border-slate-800 text-center flex flex-col items-center justify-center">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-slate-800 to-slate-900 border border-slate-700/80 flex items-center justify-center mb-3 text-emerald-400 shadow-inner">
+            <Eye className="w-7 h-7" />
+          </div>
+
+          <h3 className="text-base font-bold text-white mb-1.5">
+            {lang === 'bn'
+              ? 'বটের সিগনাল স্ট্যান্ডবাই আছে (কোনো ভুয়া সিগনাল নেই)'
+              : 'Bot is on Standby (Zero Fake Signals)'}
+          </h3>
+          <p className="text-xs text-slate-400 max-w-md leading-relaxed mb-4">
+            {lang === 'bn'
+              ? 'বট নিজে থেকে কোনো কাল্পনিক সিগনাল দেয় না। শতভাগ সঠিক প্রেডিকশন পেতে বামপাশের প্যানেল থেকে আপনার Poppo Live গেম স্ক্রিন স্ক্যান করুন।'
+              : 'The bot never fabricates arbitrary signals. Scan or upload your Poppo Live screen on the left to receive live predictions.'}
+          </p>
+
+          <div className="w-full grid grid-cols-1 sm:grid-cols-3 gap-2 text-left mb-4">
+            <div className="p-2.5 bg-slate-900/90 border border-slate-800 rounded-xl">
+              <span className="text-[10px] font-bold text-emerald-400 block mb-0.5">১. ক্যামেরা অন করুন</span>
+              <span className="text-[11px] text-slate-300">ফোনের ক্যামেরা দিয়ে Poppo Live স্ক্রিনের দিকে তাক করুন।</span>
+            </div>
+            <div className="p-2.5 bg-slate-900/90 border border-slate-800 rounded-xl">
+              <span className="text-[10px] font-bold text-cyan-400 block mb-0.5">২. স্ক্রিনশট দিন</span>
+              <span className="text-[11px] text-slate-300">গেমের স্ক্রিনশট পেস্ট (Ctrl+V) বা আপলোড করুন।</span>
+            </div>
+            <div className="p-2.5 bg-slate-900/90 border border-slate-800 rounded-xl">
+              <span className="text-[10px] font-bold text-amber-400 block mb-0.5">৩. সঠিক সিগনাল</span>
+              <span className="text-[11px] text-slate-300">আসল পট ও লুদান দেখে নিখুঁত সিগনাল গ্রহণ করুন।</span>
+            </div>
+          </div>
+
+          {onTriggerScan && (
+            <button
+              onClick={onTriggerScan}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-emerald-950 transition-all active:scale-95"
+            >
+              <Camera className="w-4 h-4" />
+              <span>{lang === 'bn' ? '📷 স্ক্রিন স্ক্যান শুরু করুন' : 'Scan Live Screen'}</span>
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 4. Genuine Valid Prediction
+  const data = prediction;
   const rec = data.recommendedHouse;
   const isA = rec === 'A';
   const isB = rec === 'B';
@@ -109,20 +212,35 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
           <span className="px-2.5 py-1 rounded-lg text-xs font-bold tracking-wide uppercase bg-slate-900/90 border border-slate-700/60 text-slate-200">
             {lang === 'bn' ? 'লাইভ সিগনাল ড্যাশবোর্ড' : 'LIVE SIGNAL DASHBOARD'}
           </span>
-          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
-            {lang === 'bn' ? 'রেডি' : 'ACTIVE'}
+          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-emerald-500/20 text-emerald-300 border-emerald-500/30 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+            <span>{lang === 'bn' ? 'ভেরিফাইড' : 'VERIFIED'}</span>
           </span>
         </div>
 
-        {/* Voice Announcer Button */}
-        <button
-          onClick={() => speakBangla(data.banglaVoiceAlert)}
-          className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-amber-300 flex items-center gap-1.5 transition-colors"
-          title="বাংলা ভয়েসে শুনুন"
-        >
-          <Volume2 className="w-3.5 h-3.5 text-amber-400" />
-          <span>{lang === 'bn' ? 'ভয়েস শুনুন' : 'Voice Alert'}</span>
-        </button>
+        <div className="flex items-center gap-1.5">
+          {/* Reset Signal Button for next round */}
+          {onResetSignal && (
+            <button
+              onClick={onResetSignal}
+              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-slate-300 flex items-center gap-1 transition-colors"
+              title="নতুন রাউন্ডের জন্য সিগনাল ক্লিয়ার করুন"
+            >
+              <RefreshCw className="w-3 h-3 text-slate-400" />
+              <span>{lang === 'bn' ? 'ক্লিয়ার' : 'Clear'}</span>
+            </button>
+          )}
+
+          {/* Voice Announcer Button */}
+          <button
+            onClick={() => speakBangla(data.banglaVoiceAlert)}
+            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-amber-300 flex items-center gap-1.5 transition-colors"
+            title="বাংলা ভয়েসে শুনুন"
+          >
+            <Volume2 className="w-3.5 h-3.5 text-amber-400" />
+            <span>{lang === 'bn' ? 'ভয়েস' : 'Voice'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Recommended House Hero */}
@@ -139,59 +257,24 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
           </div>
         </div>
 
-        {/* Confidence Percentage */}
-        <div className="flex items-center gap-2.5">
-          <div className="text-right">
-            <span className="text-[11px] text-slate-400 block font-medium">
-              {lang === 'bn' ? 'জেতার সম্ভাবনা' : 'Win Chance'}
-            </span>
-            <span className="text-3xl font-black text-amber-300 font-mono">
-              {data.confidencePercent}%
-            </span>
-          </div>
-          <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
-            <Flame className="w-6 h-6 text-amber-400 animate-pulse" />
-          </div>
+        <div className="text-left sm:text-right">
+          <span className="text-xs font-semibold text-slate-400 block mb-0.5">
+            {lang === 'bn' ? 'নির্ভরযোগ্যতা (কনফিডেন্স)' : 'Confidence'}
+          </span>
+          <span className="text-2xl font-black text-emerald-400">
+            {data.confidencePercent}%
+          </span>
         </div>
       </div>
 
-      {/* 3 House Probability Signals: A%, B%, C% */}
-      <div className="mb-4 bg-slate-950/70 border border-slate-800/90 rounded-xl p-4">
-        <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">
-          {lang === 'bn' ? '৩ ঘরের সিগনাল বণ্টন (A %  •  B %  •  C %):' : '3-House Probability Breakdown:'}
-        </h4>
-
-        <div className="grid grid-cols-3 gap-2.5 mb-3">
-          {/* Box A */}
-          <div className={`p-2.5 rounded-xl border text-center transition-all ${
-            isA ? 'bg-blue-950/50 border-blue-500 shadow-md shadow-blue-900/30 ring-1 ring-blue-500/40' : 'bg-slate-900/60 border-slate-800'
-          }`}>
-            <span className="text-xs font-black text-blue-400 block italic">HOUSE A</span>
-            <span className="text-xl font-black text-white font-mono">{data.probabilityA}%</span>
-            <span className="text-[10px] text-slate-400 block mt-0.5">{lang === 'bn' ? 'নীল ডিলার' : 'Blue Dealer'}</span>
-          </div>
-
-          {/* Box B */}
-          <div className={`p-2.5 rounded-xl border text-center transition-all ${
-            isB ? 'bg-emerald-950/50 border-emerald-500 shadow-md shadow-emerald-900/30 ring-1 ring-emerald-500/40' : 'bg-slate-900/60 border-slate-800'
-          }`}>
-            <span className="text-xs font-black text-emerald-400 block italic">HOUSE B</span>
-            <span className="text-xl font-black text-white font-mono">{data.probabilityB}%</span>
-            <span className="text-[10px] text-slate-400 block mt-0.5">{lang === 'bn' ? 'সবুজ ডিলার' : 'Green Dealer'}</span>
-          </div>
-
-          {/* Box C */}
-          <div className={`p-2.5 rounded-xl border text-center transition-all ${
-            isC ? 'bg-orange-950/50 border-orange-500 shadow-md shadow-orange-900/30 ring-1 ring-orange-500/40' : 'bg-slate-900/60 border-slate-800'
-          }`}>
-            <span className="text-xs font-black text-orange-400 block italic">HOUSE C</span>
-            <span className="text-xl font-black text-white font-mono">{data.probabilityC}%</span>
-            <span className="text-[10px] text-slate-400 block mt-0.5">{lang === 'bn' ? 'কমলা ডিলার' : 'Orange Dealer'}</span>
-          </div>
+      {/* Three Houses Probability Breakdown Bar */}
+      <div className="mb-4">
+        <div className="flex items-center justify-between text-xs font-bold mb-1.5">
+          <span className="text-blue-400">A: {data.probabilityA}%</span>
+          <span className="text-emerald-400">B: {data.probabilityB}%</span>
+          <span className="text-orange-400">C: {data.probabilityC}%</span>
         </div>
-
-        {/* Tri-color Split Progress Bar */}
-        <div className="h-2.5 w-full bg-slate-900 rounded-full overflow-hidden flex p-[1px]">
+        <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden flex border border-slate-800">
           <div
             className="h-full bg-blue-500 transition-all duration-500 rounded-l-full"
             style={{ width: `${data.probabilityA}%` }}
@@ -215,10 +298,14 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
         <div className="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-slate-800">
           <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
             <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
-            {lang === 'bn' ? 'রিয়েল সিন ডিটেকশন রিপোর্ট (জেমিনাই ভিশন):' : 'Real Scene OCR Vision Report:'}
+            {lang === 'bn'
+              ? data.sourceMode === 'roadmap_math'
+                ? 'লুদান গাণিতিক হিস্ট্রি রিপোর্ট (জিরো-ফেক)'
+                : 'রিয়েল সিন ডিটেকশন রিপোর্ট (জেমিনাই ভিশন):'
+              : 'Verified Detection Report:'}
           </span>
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono font-bold">
-            100% VISION VERIFIED
+            {data.sourceMode === 'roadmap_math' ? 'ROADMAP STATS' : '100% VISION VERIFIED'}
           </span>
         </div>
 
@@ -227,8 +314,8 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
             <span className="text-slate-400 block text-[10px] uppercase font-semibold">
               {lang === 'bn' ? 'গেম ফেজ ও টাইমার' : 'Game Phase'}
             </span>
-            <span className="font-bold text-slate-100">
-              {data.detectedSceneProof?.detectedPhase || 'বেটিং পর্ব (04s বাকি)'}
+            <span className="font-bold text-slate-100 truncate block">
+              {data.detectedSceneProof?.detectedPhase || 'বেটিং পর্ব'}
             </span>
           </div>
 
@@ -236,8 +323,8 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
             <span className="text-slate-400 block text-[10px] uppercase font-semibold">
               {lang === 'bn' ? 'সনাক্তকৃত পট' : 'Detected Pots'}
             </span>
-            <span className="font-bold text-amber-300 truncate block" title={data.detectedSceneProof?.detectedPots || 'Pot A: 15.5M • B: 10.3M • C: 6.8M'}>
-              {data.detectedSceneProof?.detectedPots || 'A: 15.5M • B: 10.3M • C: 6.8M'}
+            <span className="font-bold text-amber-300 truncate block" title={data.detectedSceneProof?.detectedPots || 'দৃশ্যমান নয়'}>
+              {data.detectedSceneProof?.detectedPots || 'দৃশ্যমান নয়'}
             </span>
           </div>
 
@@ -245,8 +332,8 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
             <span className="text-slate-400 block text-[10px] uppercase font-semibold">
               {lang === 'bn' ? 'নিচের লুদান সিকোয়েন্স' : 'Roadmap Beads'}
             </span>
-            <span className="font-bold text-cyan-300 truncate block font-serif italic" title={data.detectedSceneProof?.detectedRoadmap || 'C, B, A, C, A, C, B, A'}>
-              {data.detectedSceneProof?.detectedRoadmap || 'C, B, A, C, A, C, B, A'}
+            <span className="font-bold text-cyan-300 truncate block font-serif italic" title={data.detectedSceneProof?.detectedRoadmap || 'রেকর্ডকৃত হিস্ট্রি'}>
+              {data.detectedSceneProof?.detectedRoadmap || 'রেকর্ডকৃত হিস্ট্রি'}
             </span>
           </div>
 
@@ -254,15 +341,15 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
             <span className="text-slate-400 block text-[10px] uppercase font-semibold">
               {lang === 'bn' ? 'কার্ড স্ট্যাটাস' : 'Card State'}
             </span>
-            <span className="font-bold text-purple-300 truncate block" title={data.detectedSceneProof?.detectedCards || '৩টি কার্ড ফেস-ডাউন x2.98'}>
-              {data.detectedSceneProof?.detectedCards || '৩টি কার্ড ফেস-ডাউন x2.98'}
+            <span className="font-bold text-purple-300 truncate block" title={data.detectedSceneProof?.detectedCards || 'ফেস-ডাউন x2.98'}>
+              {data.detectedSceneProof?.detectedCards || 'ফেস-ডাউন x2.98'}
             </span>
           </div>
         </div>
       </div>
 
       {/* Pot Analysis Alert */}
-      {data.potAnalysis && (
+      {data.potAnalysis && data.potAnalysis.biasWarning && (
         <div className="mb-4 p-3 bg-slate-950/80 border border-slate-800 rounded-xl flex items-start gap-2.5 text-xs">
           <Coins className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
           <div>
@@ -270,9 +357,11 @@ export const PredictionResult: React.FC<PredictionResultProps> = ({
               <span className="font-bold text-amber-300">
                 {lang === 'bn' ? 'চিপস ও পট বিশ্লেষণ:' : 'Pot Volume Breakdown:'}
               </span>
-              <span className="text-[10px] text-slate-400">
-                A: {data.potAnalysis.potA} • B: {data.potAnalysis.potB} • C: {data.potAnalysis.potC}
-              </span>
+              {data.potAnalysis.potA !== 'দৃশ্যমান নয়' && (
+                <span className="text-[10px] text-slate-400">
+                  A: {data.potAnalysis.potA} • B: {data.potAnalysis.potB} • C: {data.potAnalysis.potC}
+                </span>
+              )}
             </div>
             <p className="text-slate-300 text-[11px] leading-relaxed">
               {data.potAnalysis.biasWarning}

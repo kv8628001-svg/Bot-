@@ -10,7 +10,7 @@ import { PredictionResult } from './components/PredictionResult';
 import { RoadmapBoard } from './components/RoadmapBoard';
 import { StrategyGuide } from './components/StrategyGuide';
 import { AiAdvisorChat } from './components/AiAdvisorChat';
-import { PredictionData, GameRound, HouseWinner } from './types';
+import { PredictionData, GameRound, HouseWinner, ScanErrorState } from './types';
 import { playAlertChime, speakBangla, triggerAndroidVibration } from './utils/goldenFlowerOdds';
 import { useAndroidInstall } from './hooks/useAndroidInstall';
 import {
@@ -50,6 +50,7 @@ export default function App() {
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [prediction, setPrediction] = useState<PredictionData | null>(null);
+  const [scanError, setScanError] = useState<ScanErrorState | null>(null);
 
   // Android Mobile Active Tab: 'signals' | 'roadmap' | 'strategy' | 'chat'
   const [mobileTab, setMobileTab] = useState<'signals' | 'roadmap' | 'strategy' | 'chat'>('signals');
@@ -72,9 +73,16 @@ export default function App() {
     } catch {}
   }, [history]);
 
-  // Main visual scene analysis trigger
+  // Reset current signal for next round
+  const handleResetSignal = () => {
+    setPrediction(null);
+    setScanError(null);
+  };
+
+  // Main visual scene analysis trigger - strictly authentic, zero fake signals
   const handleAnalyzeScene = async (imageBase64: string) => {
     setIsLoading(true);
+    setScanError(null);
     try {
       const res = await fetch('/api/analyze-screen', {
         method: 'POST',
@@ -86,10 +94,10 @@ export default function App() {
       });
 
       const json = await res.json();
-      const validData = json?.success && json?.data ? json.data : null;
 
-      if (validData) {
-        setPrediction(validData);
+      if (json?.success && json?.data) {
+        setPrediction(json.data);
+        setScanError(null);
 
         // Android Haptic Vibration
         if (vibrationEnabled) {
@@ -97,64 +105,36 @@ export default function App() {
         }
 
         if (soundEnabled) playAlertChime('predict');
-        if (voiceEnabled && validData.banglaVoiceAlert) speakBangla(validData.banglaVoiceAlert);
+        if (voiceEnabled && json.data.banglaVoiceAlert) speakBangla(json.data.banglaVoiceAlert);
       } else {
-        // High-precision algorithmic fallback based on Poppo Live round mechanics
-        const lastWinner = history.length > 0 ? history[history.length - 1].winner : 'B';
-        const recHouse: HouseWinner = lastWinner === 'A' ? 'B' : lastWinner === 'B' ? 'C' : 'A';
-        const probA = recHouse === 'A' ? 54 : 24;
-        const probB = recHouse === 'B' ? 56 : 26;
-        const probC = recHouse === 'C' ? 52 : 20;
+        // Validation failed or scene unrecognized: NO FAKE SIGNAL!
+        setPrediction(null);
+        const errorMsg = json?.error || (lang === 'bn'
+          ? 'Poppo Live গেম টেবিল স্পষ্টভাবে সনাক্ত করা যায়নি। কোনো ভুয়া সিগনাল প্রতিরোধ করা হয়েছে।'
+          : 'Poppo Live game table could not be identified clearly. Fake signals prevented.');
+        
+        setScanError({
+          hasError: true,
+          title: lang === 'bn' ? '⚠️ ভুয়া সিগনাল প্রতিরোধ করা হয়েছে' : '⚠️ Fake Signal Prevented',
+          message: errorMsg,
+        });
 
-        const fallback: PredictionData = {
-          recommendedHouse: recHouse,
-          probabilityA: probA,
-          probabilityB: probB,
-          probabilityC: probC,
-          confidencePercent: recHouse === 'A' ? probA : recHouse === 'B' ? probB : probC,
-          likelyHandType: 'হাই কার্ড / জোড়া (High Card / Pair)',
-          trendPatternDetected: `${recHouse} এর স্ট্রং রিভার্সাল ট্রেন্ড`,
-          riskLevel: 'Low',
-          potAnalysis: {
-            potA: '15.5M',
-            potB: '10.3M',
-            potC: '6.8M',
-            biasWarning: 'Pot A তে অতিরিক্ত কয়েন লোড থাকায় B বা C অনুকূলে রয়েছে।',
-          },
-          banglaAnalysis: `পোপ্পো লাইভ গেম সিন ও হিস্ট্রি অনুযায়ী House ${recHouse} এ জিতার সম্ভাবনা সবচেয়ে বেশি (${recHouse === 'B' ? probB : recHouse === 'A' ? probA : probC}%)। মাল্টিপ্লায়ার x2.98 অনুকূল।`,
-          banglaVoiceAlert: `নতুন রাউন্ড শুরু! ${recHouse} জেতার সম্ভাবনা বেশি। ${recHouse} ঘরে বাজি ধরুন!`,
-          keySignals: [
-            'পট ভলিউম ডিস্ট্রিবিউশন বিশ্লেষণ',
-            `House ${recHouse} এর ইতিবাচক মোমেন্টাম`,
-            'মাল্টিপ্লায়ার x2.98 অনুকূল',
-          ],
-        };
-        setPrediction(fallback);
-        if (vibrationEnabled) triggerAndroidVibration([100, 50, 100]);
-        if (soundEnabled) playAlertChime('predict');
-        if (voiceEnabled) speakBangla(fallback.banglaVoiceAlert);
+        if (soundEnabled) playAlertChime('high_risk');
+        if (voiceEnabled) {
+          speakBangla(lang === 'bn' ? 'সঠিক গেম সিন সনাক্ত হয়নি। ভুয়া সিগনাল দেওয়া বন্ধ রয়েছে।' : 'Valid scene not detected. Fake signal blocked.');
+        }
       }
-    } catch {
-      // Local fallback on any network error
-      const lastWinner = history.length > 0 ? history[history.length - 1].winner : 'B';
-      const recHouse: HouseWinner = lastWinner === 'A' ? 'B' : 'A';
-      const fallback: PredictionData = {
-        recommendedHouse: recHouse,
-        probabilityA: recHouse === 'A' ? 56 : 24,
-        probabilityB: recHouse === 'B' ? 58 : 22,
-        probabilityC: 20,
-        confidencePercent: 58,
-        likelyHandType: 'হাই কার্ড (High Card)',
-        trendPatternDetected: `${recHouse} ট্রেন্ড`,
-        riskLevel: 'Low',
-        banglaAnalysis: `House ${recHouse} এ জিতার সম্ভাবনা বেশি।`,
-        banglaVoiceAlert: `নতুন রাউন্ড শুরু! ${recHouse} ঘরে বাজি ধরুন!`,
-        keySignals: ['x2.98 মাল্টিপ্লায়ার অনুকূল'],
-      };
-      setPrediction(fallback);
-      if (vibrationEnabled) triggerAndroidVibration([100, 50, 100]);
-      if (soundEnabled) playAlertChime('predict');
-      if (voiceEnabled) speakBangla(fallback.banglaVoiceAlert);
+    } catch (err: any) {
+      // Network or parsing error: NEVER fabricate fake numbers!
+      setPrediction(null);
+      setScanError({
+        hasError: true,
+        title: lang === 'bn' ? '⚠️ কানেকশন এরর — সিগনাল স্থগিত' : '⚠️ Connection Error',
+        message: lang === 'bn'
+          ? 'সার্ভারের সাথে সংযোগ ব্যাহত হয়েছে। কোনো কাল্পনিক বা ভুয়া প্রেডিকশন না দিয়ে অপেক্ষা করা হচ্ছে।'
+          : 'Failed to communicate with server. Zero fake signals generated.',
+      });
+      if (soundEnabled) playAlertChime('high_risk');
     } finally {
       setIsLoading(false);
     }
@@ -329,6 +309,8 @@ export default function App() {
                 onAnalyze={handleAnalyzeScene}
                 isLoading={isLoading}
                 prediction={prediction}
+                scanError={scanError}
+                onResetSignal={handleResetSignal}
                 lang={lang}
               />
             </div>
@@ -337,8 +319,10 @@ export default function App() {
             <div className="lg:col-span-5 space-y-4">
               <PredictionResult
                 prediction={prediction}
+                scanError={scanError}
                 isLoading={isLoading}
                 onRecordResult={handleAddRound}
+                onResetSignal={handleResetSignal}
                 lang={lang}
               />
             </div>
