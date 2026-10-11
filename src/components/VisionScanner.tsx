@@ -63,6 +63,16 @@ export const VisionScanner: React.FC<VisionScannerProps> = ({
     pip: 'idle',
   });
 
+  const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!noticeMessage) return;
+    const timer = setTimeout(() => {
+      setNoticeMessage(null);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [noticeMessage]);
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -110,7 +120,7 @@ export const VisionScanner: React.FC<VisionScannerProps> = ({
       stopStream();
 
       if (!navigator?.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
-        alert(
+        setNoticeMessage(
           lang === 'bn'
             ? 'আপনার বর্তমান ব্রাউজার বা ডিভাইসে সরাসরি ডিসপ্লে শেয়ার অপশনটি সক্রিয় নেই। অনুগ্রহ করে "📷 ক্যামেরা" দিয়ে লাইভ ধরুন অথবা "📁 স্ক্রিনশট" বা "📋 পেস্ট" ব্যবহার করুন।'
             : 'Screen capture is not supported on this mobile device/browser. Please use Camera or Screenshot Upload.'
@@ -168,45 +178,61 @@ export const VisionScanner: React.FC<VisionScannerProps> = ({
   // Picture-in-Picture (PiP) toggle - allows the video and bot to float directly over Poppo Live
   const togglePictureInPicture = async () => {
     try {
-      if (document.pictureInPictureElement) {
-        await document.exitPictureInPicture();
+      if (typeof document !== 'undefined' && document.pictureInPictureElement) {
+        await document.exitPictureInPicture().catch(() => {});
         setIsPiPActive(false);
         return;
       }
 
-      if (!videoRef.current) return;
+      const isPiPSupported =
+        typeof document !== 'undefined' &&
+        'pictureInPictureEnabled' in document &&
+        Boolean(document.pictureInPictureEnabled) &&
+        videoRef.current !== null &&
+        typeof videoRef.current.requestPictureInPicture === 'function';
 
-      if (!streamActive) {
-        // If no active live stream, render current image to a canvas stream so user can pop it out over Poppo Live
-        const canvas = document.createElement('canvas');
-        canvas.width = 480;
-        canvas.height = 720;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.onload = async () => {
-            ctx.drawImage(img, 0, 0, 480, 720);
-            const stream = (canvas as any).captureStream ? (canvas as any).captureStream(10) : null;
-            if (stream && videoRef.current) {
-              videoRef.current.srcObject = stream;
-              await videoRef.current.play();
-              await videoRef.current.requestPictureInPicture();
-              setIsPiPActive(true);
-            }
-          };
-          img.src = currentImage || generatePoppoLiveDemoScene('betting_phase');
-        }
-      } else {
+      if (!isPiPSupported) {
+        // Fallback directly to the interactive on-screen Floating Round Bot without crashing
+        setShowFloatingBot(true);
+        setNoticeMessage(
+          lang === 'bn'
+            ? 'পিকচার-ইন-পিকচার এই পরিবেশে সরাসরি সাপোর্ট করে না — অন-স্ক্রিন ভাসমান গোল বাবল বট সক্রিয় করা হয়েছে!'
+            : 'Picture-in-Picture is not supported in this frame. Floating Round Bubble Bot activated on screen!'
+        );
+        return;
+      }
+
+      if (!streamActive || !videoRef.current) {
+        setShowFloatingBot(true);
+        setNoticeMessage(
+          lang === 'bn'
+            ? 'পিকচার-ইন-পিকচার চালু করতে প্রথমে 📷 ক্যামেরা বা 🔴 স্ক্রিন শেয়ার চালু করুন। অন-স্ক্রিন বাবল বট সক্রিয় আছে।'
+            : 'Please start Camera or Screen Share first for video PiP. Floating bot is active on screen.'
+        );
+        return;
+      }
+
+      try {
         await videoRef.current.requestPictureInPicture();
         setIsPiPActive(true);
+      } catch (pipErr) {
+        console.warn('PiP request rejected:', pipErr);
+        setShowFloatingBot(true);
+        setIsPiPActive(false);
+        setNoticeMessage(
+          lang === 'bn'
+            ? 'পিকচার-ইন-পিকচার অনুমোদন পায়নি। অন-স্ক্রিন ভাসমান বাবল বট চালু রাখা হয়েছে।'
+            : 'Picture-in-Picture was unavailable or denied. Floating bot is active on screen.'
+        );
       }
     } catch (err) {
-      console.warn('PiP error:', err);
-      alert(
+      console.warn('PiP error handled:', err);
+      setShowFloatingBot(true);
+      setIsPiPActive(false);
+      setNoticeMessage(
         lang === 'bn'
-          ? 'পিকচার-ইন-পিকচার চালু করতে প্রথমে 📷 ক্যামেরা বা 🔴 স্ক্রিন শেয়ার চালু করুন।'
-          : 'To activate Picture-in-Picture, please start Camera or Screen Share first.'
+          ? 'পিকচার-ইন-পিকচার সক্রিয় করা যায়নি। অন-স্ক্রিন ভাসমান গোল বাবল বট চালু আছে।'
+          : 'Could not activate PiP. On-screen floating bubble bot is active.'
       );
     }
   };
@@ -322,7 +348,7 @@ export const VisionScanner: React.FC<VisionScannerProps> = ({
       if (captured) imgToAnalyze = captured;
     }
     if (!imgToAnalyze) {
-      alert(lang === 'bn' ? 'অনুগ্রহ করে প্রথমে একটি স্ক্রিন বা ছবি নির্বাচন করুন।' : 'Please select a screen or image first.');
+      setNoticeMessage(lang === 'bn' ? 'অনুগ্রহ করে প্রথমে একটি স্ক্রিন বা ছবি নির্বাচন করুন।' : 'Please select a screen or image first.');
       return;
     }
     await onAnalyze(imgToAnalyze);
@@ -467,6 +493,21 @@ export const VisionScanner: React.FC<VisionScannerProps> = ({
           </button>
         </div>
       </div>
+      {/* In-app Notice Banner */}
+      {noticeMessage && (
+        <div className="mb-3 px-3 py-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-200 text-xs flex items-center justify-between gap-2 transition-all shadow-md backdrop-blur-sm animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>{noticeMessage}</span>
+          </div>
+          <button
+            onClick={() => setNoticeMessage(null)}
+            className="text-amber-400/80 hover:text-amber-200 p-0.5 rounded text-xs transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       <input
         ref={fileInputRef}
